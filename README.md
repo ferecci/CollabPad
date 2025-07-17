@@ -2,7 +2,7 @@
 
 A modern document editor built with Next.js 14, TypeScript, and tRPC.
 
-##  Features
+## Features
 
 - **GitHub Authentication**: Secure OAuth login with NextAuth
 - **Document Management**: Create, edit, and organize documents
@@ -28,12 +28,14 @@ A modern document editor built with Next.js 14, TypeScript, and tRPC.
 ## Quick Start
 
 1. **Clone the repository**
+
    ```bash
    git clone <your-repo-url>
    cd collabpad
    ```
 
 2. **Install dependencies**
+
    ```bash
    pnpm install
    ```
@@ -48,32 +50,37 @@ A modern document editor built with Next.js 14, TypeScript, and tRPC.
    - Save and copy the **Client ID** and **Client Secret**
 
 4. **Set up environment variables**
+
    ```bash
    cp env.example .env.local
    ```
-   
+
    Edit `.env.local` and update:
+
    ```bash
    # Generate a random secret (you can use: openssl rand -base64 32)
    NEXTAUTH_SECRET="your-generated-secret-here"
-   
+
    # Use your GitHub OAuth credentials
    GITHUB_ID="your-github-client-id"
    GITHUB_SECRET="your-github-client-secret"
    ```
 
 5. **Start the database**
+
    ```bash
    docker-compose up -d
    ```
 
 6. **Set up the database**
+
    ```bash
    pnpm db:generate
    pnpm db:push
    ```
 
 7. **Start the development server**
+
    ```bash
    pnpm dev
    ```
@@ -132,13 +139,13 @@ docker-compose down
 
 ## Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DATABASE_URL` | PostgreSQL connection string | ✅ |
-| `NEXTAUTH_URL` | Base URL for NextAuth | ✅ |
-| `NEXTAUTH_SECRET` | Secret for JWT encryption | ✅ |
-| `GITHUB_ID` | GitHub OAuth Client ID | ✅ |
-| `GITHUB_SECRET` | GitHub OAuth Client Secret | ✅ |
+| Variable          | Description                  | Required |
+| ----------------- | ---------------------------- | -------- |
+| `DATABASE_URL`    | PostgreSQL connection string | ✅       |
+| `NEXTAUTH_URL`    | Base URL for NextAuth        | ✅       |
+| `NEXTAUTH_SECRET` | Secret for JWT encryption    | ✅       |
+| `GITHUB_ID`       | GitHub OAuth Client ID       | ✅       |
+| `GITHUB_SECRET`   | GitHub OAuth Client Secret   | ✅       |
 
 ## License
 
