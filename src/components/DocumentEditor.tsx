@@ -2,7 +2,27 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import Typography from '@tiptap/extension-typography';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { createLowlight } from 'lowlight';
+import javascript from 'highlight.js/lib/languages/javascript';
+import typescript from 'highlight.js/lib/languages/typescript';
+import python from 'highlight.js/lib/languages/python';
+import css from 'highlight.js/lib/languages/css';
+import json from 'highlight.js/lib/languages/json';
+import bash from 'highlight.js/lib/languages/bash';
 import { trpc } from '@/lib/trpc';
+
+const lowlight = createLowlight();
+lowlight.register('javascript', javascript);
+lowlight.register('typescript', typescript);
+lowlight.register('python', python);
+lowlight.register('css', css);
+lowlight.register('json', json);
+lowlight.register('bash', bash);
 
 interface DocumentEditorProps {
   documentId: string;
@@ -10,10 +30,10 @@ interface DocumentEditorProps {
 
 export function DocumentEditor({ documentId }: DocumentEditorProps) {
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
   const [isPublic, setIsPublic] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [updateCounter, setUpdateCounter] = useState(0);
 
   const {
     data: document,
@@ -30,34 +50,76 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
     },
   });
 
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        codeBlock: false, // We'll use the lowlight version
+      }),
+      Placeholder.configure({
+        placeholder: 'Start writing your document...',
+      }),
+      Typography,
+      CodeBlockLowlight.configure({
+        lowlight,
+      }),
+    ],
+    content: '',
+    immediatelyRender: false,
+    onUpdate: ({ editor }) => {
+      const content = editor.getHTML();
+      setHasUnsavedChanges(true);
+    },
+    onTransaction: () => {
+      // Force re-render to update toolbar button states for any editor change
+      setUpdateCounter(prev => prev + 1);
+    },
+    editorProps: {
+      attributes: {
+        class: 'focus:outline-none min-h-[400px]',
+      },
+    },
+  });
+
   // Load document data when it's fetched
   useEffect(() => {
-    if (document) {
+    if (document && editor) {
       setTitle(document.title);
-      setContent(document.content);
+
+      // Clean up empty or malformed HTML content
+      let cleanContent = document.content;
+      if (
+        !cleanContent ||
+        cleanContent.trim() === '' ||
+        cleanContent.trim() === '<p></p>'
+      ) {
+        cleanContent = '';
+      }
+
+      editor.commands.setContent(cleanContent);
       setIsPublic(document.isPublic);
       setHasUnsavedChanges(false);
     }
-  }, [document]);
+  }, [document, editor]);
 
   // Track changes for unsaved state
   useEffect(() => {
-    if (document) {
+    if (document && editor) {
+      const currentContent = editor.getHTML();
       const hasChanges =
         title !== document.title ||
-        content !== document.content ||
+        currentContent !== document.content ||
         isPublic !== document.isPublic;
       setHasUnsavedChanges(hasChanges);
     }
-  }, [title, content, isPublic, document]);
+  }, [title, isPublic, document, editor]);
 
   // Auto-save functionality (save every 2 seconds after user stops typing)
   useEffect(() => {
-    if (!document || !hasUnsavedChanges) return;
+    if (!document || !hasUnsavedChanges || !editor) return;
 
     const timer = setTimeout(() => {
       if (title.trim()) {
-        // Only save if title is not empty
+        const content = editor.getHTML();
         updateDocument.mutate({
           id: documentId,
           title: title.trim(),
@@ -70,16 +132,17 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
     return () => clearTimeout(timer);
   }, [
     title,
-    content,
     isPublic,
     document,
     documentId,
     updateDocument,
     hasUnsavedChanges,
+    editor,
   ]);
 
   const handleManualSave = () => {
-    if (hasUnsavedChanges && document && title.trim()) {
+    if (hasUnsavedChanges && document && title.trim() && editor) {
+      const content = editor.getHTML();
       updateDocument.mutate({
         id: documentId,
         title: title.trim(),
@@ -197,8 +260,8 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
       </div>
 
       <div className="max-w-4xl mx-auto p-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-          <div className="mb-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
             <input
               type="text"
               value={title}
@@ -208,13 +271,113 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
             />
           </div>
 
-          <div className="prose max-w-none">
-            <textarea
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              placeholder="Start writing your document..."
-              className="w-full h-96 border-none outline-none resize-none text-gray-900 leading-relaxed placeholder-gray-400"
-            />
+          {/* Toolbar */}
+          {editor && (
+            <div className="flex items-center space-x-2 p-4 border-b border-gray-200 bg-gray-50">
+              <button
+                onClick={() => editor.chain().focus().toggleBold().run()}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  editor.isActive('bold')
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Bold
+              </button>
+              <button
+                onClick={() => editor.chain().focus().toggleItalic().run()}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  editor.isActive('italic')
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Italic
+              </button>
+              <button
+                onClick={() => editor.chain().focus().toggleCode().run()}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  editor.isActive('code')
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Code
+              </button>
+              <div className="w-px h-6 bg-gray-300"></div>
+              <button
+                onClick={() =>
+                  editor.chain().focus().toggleHeading({ level: 1 }).run()
+                }
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  editor.isActive('heading', { level: 1 })
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                H1
+              </button>
+              <button
+                onClick={() =>
+                  editor.chain().focus().toggleHeading({ level: 2 }).run()
+                }
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  editor.isActive('heading', { level: 2 })
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                H2
+              </button>
+              <button
+                onClick={() =>
+                  editor.chain().focus().toggleHeading({ level: 3 }).run()
+                }
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  editor.isActive('heading', { level: 3 })
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                H3
+              </button>
+              <div className="w-px h-6 bg-gray-300"></div>
+              <button
+                onClick={() => editor.chain().focus().toggleBulletList().run()}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  editor.isActive('bulletList')
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                • List
+              </button>
+              <button
+                onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  editor.isActive('orderedList')
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                1. List
+              </button>
+              <button
+                onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  editor.isActive('codeBlock')
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Code Block
+              </button>
+            </div>
+          )}
+
+          {/* Editor */}
+          <div className="min-h-[400px]">
+            <EditorContent editor={editor} />
           </div>
         </div>
       </div>

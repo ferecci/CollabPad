@@ -105,7 +105,12 @@ export function DocumentsList() {
               </div>
 
               <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                {doc.content || 'No content yet...'}
+                {doc.content &&
+                doc.content.trim() &&
+                doc.content.trim() !== '<p></p>'
+                  ? doc.content.replace(/<[^>]*>/g, '').slice(0, 100) ||
+                    'No content yet...'
+                  : 'No content yet...'}
               </p>
 
               <div className="flex justify-between items-center text-xs text-gray-500">

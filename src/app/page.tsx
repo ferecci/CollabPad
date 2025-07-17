@@ -55,8 +55,8 @@ export default async function HomePage() {
               </Link>
             </div>
           ) : (
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <SignInButton />
+            <div className="text-gray-500">
+              Sign in above to start creating documents
             </div>
           )}
         </div>

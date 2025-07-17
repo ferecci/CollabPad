@@ -4,12 +4,13 @@ import { SignInButton } from '@/components/AuthButtons';
 import { DocumentEditor } from '@/components/DocumentEditor';
 
 interface EditorPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function EditorPage({ params }: EditorPageProps) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
 
   if (!session) {
@@ -24,5 +25,5 @@ export default async function EditorPage({ params }: EditorPageProps) {
     );
   }
 
-  return <DocumentEditor documentId={params.id} />;
+  return <DocumentEditor documentId={id} />;
 }
