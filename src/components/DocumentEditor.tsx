@@ -53,7 +53,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        codeBlock: false, // We'll use the lowlight version
+        codeBlock: false,
       }),
       Placeholder.configure({
         placeholder: 'Start writing your document...',
@@ -70,7 +70,6 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
       setHasUnsavedChanges(true);
     },
     onTransaction: () => {
-      // Force re-render to update toolbar button states for any editor change
       setUpdateCounter(prev => prev + 1);
     },
     editorProps: {
@@ -85,7 +84,6 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
     if (document && editor) {
       setTitle(document.title);
 
-      // Clean up empty or malformed HTML content
       let cleanContent = document.content;
       if (
         !cleanContent ||
@@ -101,7 +99,6 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
     }
   }, [document, editor]);
 
-  // Track changes for unsaved state
   useEffect(() => {
     if (document && editor) {
       const currentContent = editor.getHTML();
@@ -271,7 +268,6 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
             />
           </div>
 
-          {/* Toolbar */}
           {editor && (
             <div className="flex items-center space-x-2 p-4 border-b border-gray-200 bg-gray-50">
               <button
@@ -375,7 +371,6 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
             </div>
           )}
 
-          {/* Editor */}
           <div className="min-h-[400px]">
             <EditorContent editor={editor} />
           </div>

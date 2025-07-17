@@ -151,7 +151,6 @@ export const documentsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Check if user owns the document or is a collaborator with edit rights
       const document = await ctx.prisma.document.findFirst({
         where: {
           id: input.id,
@@ -198,7 +197,6 @@ export const documentsRouter = createTRPCRouter({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Only the owner can delete a document
       const document = await ctx.prisma.document.findFirst({
         where: {
           id: input.id,
