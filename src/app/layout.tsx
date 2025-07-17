@@ -1,7 +1,7 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { SessionProvider } from 'next-auth/react'
+import { Providers } from '@/components/Providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -10,7 +10,11 @@ export const metadata: Metadata = {
   description: 'A real-time collaborative markdown editor with CRDT sync',
   keywords: ['collaborative', 'editor', 'markdown', 'realtime', 'crdt'],
   authors: [{ name: 'CollabPad Team' }],
-  viewport: 'width=device-width, initial-scale=1',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -21,12 +25,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <SessionProvider>
-          <div className="min-h-screen bg-gray-50">
-            {children}
-          </div>
-        </SessionProvider>
+        <Providers>
+          <div className="min-h-screen bg-gray-50">{children}</div>
+        </Providers>
       </body>
     </html>
   );
-} 
+}

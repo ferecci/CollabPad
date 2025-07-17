@@ -1,35 +1,31 @@
-# CollabPad
+# 📝 CollabPad
 
-A real-time collaborative markdown editor with CRDT sync, built with Next.js 14, TypeScript, and Yjs.
+A modern document editor built with Next.js 14, TypeScript, and tRPC.
 
-## 🚀 Features
+##  Features
 
-- **Real-time Collaboration**: Google Docs-style live editing with multiple cursors
-- **CRDT Sync**: Conflict-free replicated data types for reliable collaboration
-- **Markdown Editor**: Rich text editing powered by TipTap
-- **Authentication**: GitHub OAuth integration with NextAuth
-- **Type Safety**: Full-stack TypeScript with tRPC
-- **Modern Stack**: Next.js 14, Prisma, PostgreSQL, Redis
+- **GitHub Authentication**: Secure OAuth login with NextAuth
+- **Document Management**: Create, edit, and organize documents
+- **Full-Stack TypeScript**: End-to-end type safety with tRPC
+- **Modern UI**: Clean interface built with Tailwind CSS
+- **Database**: PostgreSQL with Prisma ORM
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Frontend**: Next.js 14, React 18, TypeScript
 - **Backend**: tRPC, Prisma, PostgreSQL
-- **Real-time**: Yjs, y-websocket
-- **Editor**: TipTap
-- **Auth**: NextAuth.js
+- **Auth**: NextAuth.js with GitHub OAuth
 - **Styling**: Tailwind CSS
-- **Testing**: Jest, React Testing Library
+- **Testing**: Jest
 
-## 📋 Prerequisites
+## Prerequisites
 
-- Node.js 18+ 
-- pnpm (recommended) or npm
+- Node.js 18+
+- pnpm (recommended)
 - Docker & Docker Compose
-- PostgreSQL
-- Redis
+- GitHub account (for OAuth setup)
 
-## 🚀 Quick Start
+## Quick Start
 
 1. **Clone the repository**
    ```bash
@@ -42,32 +38,50 @@ A real-time collaborative markdown editor with CRDT sync, built with Next.js 14,
    pnpm install
    ```
 
-3. **Set up environment variables**
+3. **Set up GitHub OAuth App**
+   - Go to [GitHub Developer Settings](https://github.com/settings/developers)
+   - Click "New OAuth App"
+   - Fill in:
+     - **Application name**: `CollabPad (Local)`
+     - **Homepage URL**: `http://localhost:3000`
+     - **Authorization callback URL**: `http://localhost:3000/api/auth/callback/github`
+   - Save and copy the **Client ID** and **Client Secret**
+
+4. **Set up environment variables**
    ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your configuration
+   cp env.example .env.local
+   ```
+   
+   Edit `.env.local` and update:
+   ```bash
+   # Generate a random secret (you can use: openssl rand -base64 32)
+   NEXTAUTH_SECRET="your-generated-secret-here"
+   
+   # Use your GitHub OAuth credentials
+   GITHUB_ID="your-github-client-id"
+   GITHUB_SECRET="your-github-client-secret"
    ```
 
-4. **Start the development stack**
+5. **Start the database**
    ```bash
    docker-compose up -d
    ```
 
-5. **Run database migrations**
+6. **Set up the database**
    ```bash
    pnpm db:generate
    pnpm db:push
    ```
 
-6. **Start the development server**
+7. **Start the development server**
    ```bash
    pnpm dev
    ```
 
-7. **Open your browser**
+8. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 collabpad/
@@ -78,15 +92,15 @@ collabpad/
 │   ├── server/              # tRPC server setup
 │   └── types/               # TypeScript type definitions
 ├── prisma/                  # Database schema and migrations
-├── docker-compose.yml       # Development environment
-└── roadmap.txt             # Development roadmap
+└── docker-compose.yml       # Development environment
 ```
 
-## 🧪 Development
+## Development
 
 ### Available Scripts
 
 - `pnpm dev` - Start development server
+- `pnpm dev:quiet` - Start development server (suppresses npm warnings)
 - `pnpm build` - Build for production
 - `pnpm start` - Start production server
 - `pnpm lint` - Run ESLint
@@ -101,43 +115,31 @@ collabpad/
 - `pnpm db:push` - Push schema to database
 - `pnpm db:migrate` - Run database migrations
 - `pnpm db:studio` - Open Prisma Studio
+- `pnpm db:seed` - Seed database with test data
 
-## 🐳 Docker Development
-
-The project includes a Docker Compose setup for easy development:
+## Docker Development
 
 ```bash
-# Start all services
+# Start services
 docker-compose up -d
 
 # View logs
 docker-compose logs -f
 
-# Stop all services
+# Stop services
 docker-compose down
 ```
 
-## 📊 Roadmap
+## Environment Variables
 
-See [roadmap.txt](./roadmap.txt) for detailed development milestones and progress.
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | PostgreSQL connection string | ✅ |
+| `NEXTAUTH_URL` | Base URL for NextAuth | ✅ |
+| `NEXTAUTH_SECRET` | Secret for JWT encryption | ✅ |
+| `GITHUB_ID` | GitHub OAuth Client ID | ✅ |
+| `GITHUB_SECRET` | GitHub OAuth Client Secret | ✅ |
 
-**Current Focus**: Milestone 2 - Realtime CRDT Sync (Target: 35 hours)
+## License
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [Yjs](https://github.com/yjs/yjs) for CRDT implementation
-- [TipTap](https://tiptap.dev/) for the rich text editor
-- [tRPC](https://trpc.io/) for type-safe APIs
-- [Next.js](https://nextjs.org/) for the React framework 
+This project is licensed in 2025 under the MIT License by ferecci (Felipe Tancredo).

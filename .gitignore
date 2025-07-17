@@ -97,4 +97,13 @@ jspm_packages/
 *.sqlite
 
 # Prisma
-prisma/migrations/
+prisma/migrations/migration_lock.toml
+
+# Next.js specific
+.next/trace
+.next/cache
+
+# Testing
+test-results/
+playwright-report/
+coverage/

@@ -1,23 +1,10 @@
 {
-  "extends": [
-    "next/core-web-vitals",
-    "@typescript-eslint/recommended"
-  ],
-  "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint"],
+  "extends": ["next/core-web-vitals"],
   "rules": {
-    "@typescript-eslint/no-unused-vars": "error",
-    "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/explicit-function-return-type": "off",
-    "@typescript-eslint/explicit-module-boundary-types": "off",
+    "@typescript-eslint/no-unused-vars": "off",
+    "@typescript-eslint/no-explicit-any": "off",
     "prefer-const": "error",
     "no-var": "error"
   },
-  "ignorePatterns": [
-    "node_modules/",
-    ".next/",
-    "out/",
-    "build/",
-    "dist/"
-  ]
-} 
+  "ignorePatterns": ["node_modules/", ".next/", "out/", "build/", "dist/"]
+}

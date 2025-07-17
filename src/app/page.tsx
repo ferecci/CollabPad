@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
-import { authOptions } from './api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import { SignInButton, SignOutButton } from '@/components/AuthButtons';
 
 export default async function HomePage() {
@@ -9,16 +9,16 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8">
       <div className="max-w-4xl mx-auto text-center">
-        <h1 className="text-6xl font-bold text-gray-900 mb-6">
-          CollabPad
-        </h1>
+        <h1 className="text-6xl font-bold text-gray-900 mb-6">CollabPad</h1>
         <p className="text-xl text-gray-600 mb-8">
-          Real-time collaborative markdown editor with CRDT sync
+          Collaborative document editor with full-stack TypeScript
         </p>
         <div className="mb-6">
           {session?.user ? (
             <div className="flex flex-col items-center gap-2">
-              <span className="text-gray-700">Signed in as <b>{session.user.email}</b></span>
+              <span className="text-gray-700">
+                Signed in as <b>{session.user.email}</b>
+              </span>
               <SignOutButton />
             </div>
           ) : (
@@ -34,31 +34,33 @@ export default async function HomePage() {
               TypeScript
             </span>
             <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full">
-              Yjs CRDT
+              tRPC
             </span>
             <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full">
-              TipTap
+              Prisma
             </span>
             <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full">
-              tRPC
+              PostgreSQL
             </span>
           </div>
         </div>
         <div className="space-y-4">
-          <Link
-            href="/editor"
-            className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            Try the Editor
-          </Link>
-          <div className="text-sm text-gray-500">
-            <p>Coming soon: Authentication, real-time collaboration, and more!</p>
-          </div>
-        </div>
-        <div className="mt-16 text-sm text-gray-400">
-          <p>Development in progress - See roadmap.txt for details</p>
+          {session?.user ? (
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href="/documents"
+                className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+              >
+                View Documents
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <SignInButton />
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
-} 
+}

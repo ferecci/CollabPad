@@ -1,39 +1,39 @@
-import { prisma } from './prisma'
-import type { User, Document, DocumentCollaborator } from '@prisma/client'
+import { prisma } from './prisma';
+import type { User, Document, DocumentCollaborator } from '@prisma/client';
 
 // User operations
 export async function createUser(data: {
-  email: string
-  name?: string
-  image?: string
+  email: string;
+  name?: string;
+  image?: string;
 }): Promise<User> {
   return prisma.user.create({
     data,
-  })
+  });
 }
 
 export async function getUserById(id: string): Promise<User | null> {
   return prisma.user.findUnique({
     where: { id },
-  })
+  });
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
   return prisma.user.findUnique({
     where: { email },
-  })
+  });
 }
 
 // Document operations
 export async function createDocument(data: {
-  title: string
-  content?: string
-  ownerId: string
-  isPublic?: boolean
+  title: string;
+  content?: string;
+  ownerId: string;
+  isPublic?: boolean;
 }): Promise<Document> {
   return prisma.document.create({
     data,
-  })
+  });
 }
 
 export async function getDocumentById(id: string): Promise<Document | null> {
@@ -47,7 +47,7 @@ export async function getDocumentById(id: string): Promise<Document | null> {
         },
       },
     },
-  })
+  });
 }
 
 export async function getUserDocuments(userId: string): Promise<Document[]> {
@@ -75,38 +75,38 @@ export async function getUserDocuments(userId: string): Promise<Document[]> {
     orderBy: {
       updatedAt: 'desc',
     },
-  })
+  });
 }
 
 export async function updateDocument(
   id: string,
   data: {
-    title?: string
-    content?: string
-    isPublic?: boolean
+    title?: string;
+    content?: string;
+    isPublic?: boolean;
   }
 ): Promise<Document> {
   return prisma.document.update({
     where: { id },
     data,
-  })
+  });
 }
 
 export async function deleteDocument(id: string): Promise<Document> {
   return prisma.document.delete({
     where: { id },
-  })
+  });
 }
 
 // Collaboration operations
 export async function addCollaborator(data: {
-  documentId: string
-  userId: string
-  role?: string
+  documentId: string;
+  userId: string;
+  role?: string;
 }): Promise<DocumentCollaborator> {
   return prisma.documentCollaborator.create({
     data,
-  })
+  });
 }
 
 export async function removeCollaborator(
@@ -120,7 +120,7 @@ export async function removeCollaborator(
         userId,
       },
     },
-  })
+  });
 }
 
 export async function updateCollaboratorRole(
@@ -136,5 +136,5 @@ export async function updateCollaboratorRole(
       },
     },
     data: { role },
-  })
-} 
+  });
+}
