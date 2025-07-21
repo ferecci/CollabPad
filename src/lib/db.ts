@@ -1,7 +1,6 @@
 import { prisma } from './prisma';
 import type { User, Document, DocumentCollaborator } from '@prisma/client';
 
-// User operations
 export async function createUser(data: {
   email: string;
   name?: string;
@@ -24,7 +23,6 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   });
 }
 
-// Document operations
 export async function createDocument(data: {
   title: string;
   content?: string;
@@ -98,7 +96,6 @@ export async function deleteDocument(id: string): Promise<Document> {
   });
 }
 
-// Collaboration operations
 export async function addCollaborator(data: {
   documentId: string;
   userId: string;

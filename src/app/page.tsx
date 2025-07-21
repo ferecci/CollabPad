@@ -44,22 +44,16 @@ export default async function HomePage() {
             </span>
           </div>
         </div>
-        <div className="space-y-4">
-          {session?.user ? (
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/documents"
-                className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-              >
-                View Documents
-              </Link>
-            </div>
-          ) : (
-            <div className="text-gray-500">
-              Sign in above to start creating documents
-            </div>
-          )}
-        </div>
+        {session?.user && (
+          <div className="mt-8">
+            <Link
+              href="/documents"
+              className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+            >
+              My Documents
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure } from '../trpc';
 
 export const documentsRouter = createTRPCRouter({
-  // Create a new document
+  // Create document
   create: protectedProcedure
     .input(
       z.object({
@@ -34,7 +34,7 @@ export const documentsRouter = createTRPCRouter({
       return document;
     }),
 
-  // Get all documents for the current user
+  // List documents for user
   list: protectedProcedure
     .input(
       z.object({
@@ -89,7 +89,7 @@ export const documentsRouter = createTRPCRouter({
       };
     }),
 
-  // Get a single document by ID
+  // Get document by ID
   byId: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -140,7 +140,7 @@ export const documentsRouter = createTRPCRouter({
       return document;
     }),
 
-  // Update a document
+  // Update document
   update: protectedProcedure
     .input(
       z.object({
@@ -193,7 +193,7 @@ export const documentsRouter = createTRPCRouter({
       return updatedDocument;
     }),
 
-  // Delete a document
+  // Delete document
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {

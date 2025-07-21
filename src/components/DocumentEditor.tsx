@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Typography from '@tiptap/extension-typography';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import Collaboration from '@tiptap/extension-collaboration';
 import { createLowlight } from 'lowlight';
 import javascript from 'highlight.js/lib/languages/javascript';
 import typescript from 'highlight.js/lib/languages/typescript';
@@ -15,6 +16,17 @@ import css from 'highlight.js/lib/languages/css';
 import json from 'highlight.js/lib/languages/json';
 import bash from 'highlight.js/lib/languages/bash';
 import { trpc } from '@/lib/trpc';
+import * as Y from 'yjs';
+// @ts-ignore
+import { WebsocketProvider } from 'y-websocket';
+import { useSession } from 'next-auth/react';
+import { CollaborativeCursorExtension } from './CollaborativeCursorExtension';
+
+declare global {
+  interface Window {
+    provider?: WebsocketProvider;
+  }
+}
 
 const lowlight = createLowlight();
 lowlight.register('javascript', javascript);
@@ -28,12 +40,63 @@ interface DocumentEditorProps {
   documentId: string;
 }
 
+// Generate random user colors for collaboration
+const getRandomColor = () => {
+  const colors = [
+    '#4B2995',
+    '#B22234',
+    '#C97A11',
+    '#B59F00',
+    '#176CA6',
+    '#1B7C6E',
+    '#3A7A1D',
+    '#5A5A5A',
+    '#2D3A4A',
+    '#3E2723',
+  ];
+  return colors[Math.floor(Math.random() * colors.length)];
+};
+
+// Helper to force awareness broadcast by bumping a dummy field
+function bumpAwareness(awareness: any) {
+  const state = awareness.getLocalState() || {};
+  // Add a dummy field
+  awareness.setLocalState({ ...state, _bump: true });
+  // Remove the dummy field after a short delay
+  setTimeout(() => {
+    const reverted = { ...awareness.getLocalState() };
+    delete reverted._bump;
+    awareness.setLocalState(reverted);
+  }, 0);
+}
+
 export function DocumentEditor({ documentId }: DocumentEditorProps) {
+  const { data: session } = useSession();
   const [title, setTitle] = useState('');
   const [isPublic, setIsPublic] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [updateCounter, setUpdateCounter] = useState(0);
+  const [isCollaborationReady, setIsCollaborationReady] = useState(false);
+  const [isCursorReady, setIsCursorReady] = useState(false);
+  const [connectedUsers, setConnectedUsers] = useState(0);
+  const [activeUsers, setActiveUsers] = useState<
+    Array<{ name: string; color: string }>
+  >([]);
+  const [editorUpdate, setEditorUpdate] = useState(0);
+  const [activeFormats, setActiveFormats] = useState({
+    bold: false,
+    italic: false,
+    code: false,
+    heading1: false,
+    heading2: false,
+    heading3: false,
+    bulletList: false,
+    orderedList: false,
+    codeBlock: false,
+  });
+
+  // Yjs setup
+  const ydocRef = useRef<Y.Doc | null>(null);
+  const providerRef = useRef<WebsocketProvider | null>(null);
+  const [yReady, setYReady] = useState(false);
 
   const {
     data: document,
@@ -43,110 +106,353 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
     id: documentId,
   });
 
-  const updateDocument = trpc.documents.update.useMutation({
-    onSuccess: () => {
-      setLastSaved(new Date());
-      setHasUnsavedChanges(false);
-    },
-  });
+  const updateDocument = trpc.documents.update.useMutation();
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        codeBlock: false,
-      }),
-      Placeholder.configure({
-        placeholder: 'Start writing your document...',
-      }),
-      Typography,
-      CodeBlockLowlight.configure({
-        lowlight,
-      }),
-    ],
-    content: '',
-    immediatelyRender: false,
-    onUpdate: ({ editor }) => {
-      const content = editor.getHTML();
-      setHasUnsavedChanges(true);
-    },
-    onTransaction: () => {
-      setUpdateCounter(prev => prev + 1);
-    },
-    editorProps: {
-      attributes: {
-        class: 'focus:outline-none min-h-[400px]',
+  // Yjs and provider initialization ensures real-time collaboration and awareness state sync across clients. Handles connection, awareness, and user state updates robustly.
+  useEffect(() => {
+    if (!ydocRef.current) ydocRef.current = new Y.Doc();
+    providerRef.current = new WebsocketProvider(
+      'ws://localhost:1234',
+      `document-${documentId}`,
+      ydocRef.current
+    );
+    if (typeof window !== 'undefined') {
+      window.provider = providerRef.current;
+    }
+    providerRef.current.on('status', (event: any) => {
+      const isConnected = event.status === 'connected';
+      setIsCollaborationReady(isConnected);
+      if (isConnected) {
+        setTimeout(() => {
+          setIsCursorReady(true);
+        }, 1000);
+      } else {
+        setIsCursorReady(false);
+      }
+    });
+    providerRef.current.awareness.on('change', () => {
+      if (providerRef.current) {
+        const states = providerRef.current.awareness.getStates();
+        const entries = Array.from(states.entries()) as [any, any][];
+        for (const [clientId, state] of entries) {
+          // console.log(`🌐 Awareness clientId: ${clientId}`, state.user);
+        }
+        setConnectedUsers(states.size);
+        const users: Array<{ name: string; color: string }> = [];
+        states.forEach((state: any) => {
+          if (state.user) {
+            users.push({
+              name: state.user.name || 'Anonymous',
+              color: state.user.color || '#958DF1',
+            });
+          }
+        });
+        setActiveUsers(users);
+      }
+    });
+    setYReady(true);
+  }, [documentId]);
+
+  // Clean up awareness on page unload/refresh
+  const handleBeforeUnload = () => {
+    if (providerRef.current) {
+      providerRef.current.awareness.setLocalState(null);
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (providerRef.current) {
+        // Clean up awareness state before destroying
+        providerRef.current.awareness.setLocalState(null);
+        providerRef.current.destroy();
+        providerRef.current = null;
+      }
+      if (ydocRef.current) {
+        ydocRef.current.destroy();
+        ydocRef.current = null;
+      }
+      setYReady(false);
+      setIsCollaborationReady(false);
+      setIsCursorReady(false);
+    };
+  }, []);
+
+  // Memoize user color and user object for stable identity
+  const userColor = useMemo(() => getRandomColor(), []);
+  const userInfo = useMemo(() => {
+    if (!session?.user) return null;
+    const baseName = session.user.name || session.user.email || 'Anonymous';
+    const baseId =
+      session.user.id || session.user.email || Math.random().toString(36);
+    let name = baseName;
+    let id = baseId;
+    if (providerRef.current) {
+      const states = providerRef.current.awareness.getStates();
+      const names = Array.from(states.values())
+        .map((s: any) => s?.user?.name)
+        .filter(Boolean);
+      const ids = Array.from(states.values())
+        .map((s: any) => s?.user?.id)
+        .filter(Boolean);
+      // Find next available counter for name
+      let counter = 1;
+      let candidateName = baseName;
+      let candidateId = baseId;
+      while (names.includes(candidateName) || ids.includes(candidateId)) {
+        counter += 1;
+        candidateName = `${baseName}-${counter}`;
+        candidateId = `${baseId}-${counter}`;
+      }
+      name = candidateName;
+      id = candidateId;
+    }
+    return {
+      name,
+      color: userColor,
+      id,
+    };
+  }, [session?.user, userColor]);
+
+  // Update user info when session changes
+  useEffect(() => {
+    if (providerRef.current && userInfo && yReady) {
+      try {
+        providerRef.current.awareness.setLocalStateField('user', userInfo);
+      } catch (error) {
+        console.warn('Failed to set user awareness:', error);
+      }
+    }
+  }, [userInfo, yReady]);
+
+  // Editor initialization
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({
+          codeBlock: false,
+        }),
+        Placeholder.configure({
+          placeholder: 'Start writing your document...',
+        }),
+        Typography,
+        CodeBlockLowlight.configure({
+          lowlight,
+        }),
+        ...(yReady && ydocRef.current
+          ? [
+              Collaboration.configure({
+                document: ydocRef.current,
+              }),
+            ]
+          : []),
+        ...(yReady && providerRef.current && userInfo
+          ? [
+              CollaborativeCursorExtension.configure({
+                provider: providerRef.current,
+              }),
+            ]
+          : []),
+      ],
+      immediatelyRender: false,
+      editorProps: {
+        attributes: {
+          class: 'focus:outline-none min-h-[400px]',
+        },
+      },
+      onUpdate: ({ editor }) => {
+        // Force re-render to update button states
+        setEditorUpdate(prev => prev + 1);
+      },
+      onTransaction: ({ editor }) => {
+        // Update active format states
+        setActiveFormats({
+          bold: editor.isActive('bold'),
+          italic: editor.isActive('italic'),
+          code: editor.isActive('code'),
+          heading1: editor.isActive('heading', { level: 1 }),
+          heading2: editor.isActive('heading', { level: 2 }),
+          heading3: editor.isActive('heading', { level: 3 }),
+          bulletList: editor.isActive('bulletList'),
+          orderedList: editor.isActive('orderedList'),
+          codeBlock: editor.isActive('codeBlock'),
+        });
       },
     },
-  });
+    // Dependencies: include collaboration states but keep it minimal
+    [documentId, yReady, isCollaborationReady, session?.user?.id]
+  );
 
-  // Load document data when it's fetched
+  // After provider is ready, set awareness state for user and cursor, then force a sync
   useEffect(() => {
-    if (document && editor) {
+    if (providerRef.current && userInfo && yReady && editor) {
+      providerRef.current.awareness.setLocalStateField('user', userInfo);
+      const { anchor, head } = editor.state.selection;
+      providerRef.current.awareness.setLocalStateField('cursor', {
+        anchor,
+        head,
+      });
+      // Force awareness sync to broadcast state to all peers
+      providerRef.current.awareness.setLocalState(
+        providerRef.current.awareness.getLocalState()
+      );
+    }
+  }, [userInfo, yReady, editor]);
+
+  // On every selection change, update awareness with local cursor
+  useEffect(() => {
+    if (!editor || !providerRef.current || !userInfo) return;
+    const updateCursor = () => {
+      const { anchor, head } = editor.state.selection;
+      providerRef.current.awareness.setLocalStateField('cursor', {
+        anchor,
+        head,
+      });
+    };
+    editor.on('selectionUpdate', updateCursor);
+    // Set initial
+    updateCursor();
+    return () => {
+      editor.off('selectionUpdate', updateCursor);
+    };
+  }, [editor, userInfo, yReady]);
+
+  // Rebroadcast awareness state when a new peer joins (debounced, no infinite loop)
+  useEffect(() => {
+    if (!providerRef.current) return;
+    const awareness = providerRef.current.awareness;
+    let lastPeers = awareness.getStates().size;
+    let timeout: NodeJS.Timeout | null = null;
+    const rebroadcastIfNewPeer = () => {
+      const states = awareness.getStates();
+      const peerCount = states.size;
+      if (peerCount > lastPeers) {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          awareness.setLocalState(awareness.getLocalState());
+          timeout = null;
+        }, 500);
+      }
+      lastPeers = peerCount;
+    };
+    awareness.on('update', rebroadcastIfNewPeer);
+    return () => {
+      awareness.off('update', rebroadcastIfNewPeer);
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [yReady, userInfo, editor]);
+
+  // Rebroadcast awareness state on window focus/visibilitychange (using bump)
+  useEffect(() => {
+    if (!providerRef.current) return;
+    const awareness = providerRef.current.awareness;
+    const rebroadcast = () => bumpAwareness(awareness);
+    window.addEventListener('visibilitychange', rebroadcast);
+    window.addEventListener('focus', rebroadcast);
+    return () => {
+      window.removeEventListener('visibilitychange', rebroadcast);
+      window.removeEventListener('focus', rebroadcast);
+    };
+  }, [yReady, userInfo, editor]);
+
+  // Periodically bump awareness state every 10 seconds as a fallback
+  useEffect(() => {
+    if (!providerRef.current) return;
+    const awareness = providerRef.current.awareness;
+    const interval = setInterval(() => {
+      bumpAwareness(awareness);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [yReady, userInfo, editor]);
+
+  // Load document data when it's fetched (only for initial load and metadata)
+  useEffect(() => {
+    if (document && !title) {
+      // Load title and privacy settings (always needed)
       setTitle(document.title);
-
-      let cleanContent = document.content;
-      if (
-        !cleanContent ||
-        cleanContent.trim() === '' ||
-        cleanContent.trim() === '<p></p>'
-      ) {
-        cleanContent = '';
-      }
-
-      editor.commands.setContent(cleanContent);
       setIsPublic(document.isPublic);
-      setHasUnsavedChanges(false);
     }
-  }, [document, editor]);
+  }, [document, title]);
 
+  // Load initial content only when collaboration is not ready (to avoid conflicts)
   useEffect(() => {
-    if (document && editor) {
-      const currentContent = editor.getHTML();
-      const hasChanges =
-        title !== document.title ||
-        currentContent !== document.content ||
-        isPublic !== document.isPublic;
-      setHasUnsavedChanges(hasChanges);
-    }
-  }, [title, isPublic, document, editor]);
-
-  // Auto-save functionality (save every 2 seconds after user stops typing)
-  useEffect(() => {
-    if (!document || !hasUnsavedChanges || !editor) return;
-
-    const timer = setTimeout(() => {
-      if (title.trim()) {
-        const content = editor.getHTML();
-        updateDocument.mutate({
-          id: documentId,
-          title: title.trim(),
-          content,
-          isPublic,
-        });
+    if (document && editor && !isCollaborationReady) {
+      // Only set content if Yjs document is empty (first load)
+      if (ydocRef.current && editor) {
+        const yjsContent = ydocRef.current.getXmlFragment('default');
+        if (yjsContent.length === 0 && document.content) {
+          editor.commands.setContent(document.content);
+        }
       }
-    }, 2000);
+    }
+  }, [document, editor, isCollaborationReady]);
 
-    return () => clearTimeout(timer);
-  }, [
-    title,
-    isPublic,
-    document,
-    documentId,
-    updateDocument,
-    hasUnsavedChanges,
-    editor,
-  ]);
-
-  const handleManualSave = () => {
-    if (hasUnsavedChanges && document && title.trim() && editor) {
-      const content = editor.getHTML();
+  // Save title and privacy changes (not content - that's handled by Yjs)
+  const handleSaveMetadata = () => {
+    if (document && title.trim()) {
       updateDocument.mutate({
         id: documentId,
         title: title.trim(),
-        content,
         isPublic,
       });
     }
+  };
+
+  // Markdown conversion
+  const handleDownload = () => {
+    if (!editor || !title) return;
+
+    // Get HTML content and convert to markdown-like format
+    const htmlContent = editor.getHTML();
+
+    // Simple HTML to Markdown conversion
+    const markdownContent = htmlContent
+      // Remove wrapping paragraph if it's the only one
+      .replace(/^<p>(.*)<\/p>$/s, '$1')
+      // Convert headings
+      .replace(/<h1[^>]*>(.*?)<\/h1>/g, '# $1')
+      .replace(/<h2[^>]*>(.*?)<\/h2>/g, '## $1')
+      .replace(/<h3[^>]*>(.*?)<\/h3>/g, '### $1')
+      .replace(/<h4[^>]*>(.*?)<\/h4>/g, '#### $1')
+      .replace(/<h5[^>]*>(.*?)<\/h5>/g, '##### $1')
+      .replace(/<h6[^>]*>(.*?)<\/h6>/g, '###### $1')
+      // Convert bold and italic
+      .replace(/<strong[^>]*>(.*?)<\/strong>/g, '**$1**')
+      .replace(/<b[^>]*>(.*?)<\/b>/g, '**$1**')
+      .replace(/<em[^>]*>(.*?)<\/em>/g, '*$1*')
+      .replace(/<i[^>]*>(.*?)<\/i>/g, '*$1*')
+      // Convert inline code
+      .replace(/<code[^>]*>(.*?)<\/code>/g, '`$1`')
+      // Convert code blocks
+      .replace(/<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gs, '```\n$1\n```')
+      // Convert lists
+      .replace(/<ul[^>]*>/g, '')
+      .replace(/<\/ul>/g, '')
+      .replace(/<ol[^>]*>/g, '')
+      .replace(/<\/ol>/g, '')
+      .replace(/<li[^>]*>(.*?)<\/li>/g, '- $1')
+      // Convert paragraphs
+      .replace(/<p[^>]*>(.*?)<\/p>/g, '$1\n\n')
+      // Convert line breaks
+      .replace(/<br[^>]*>/g, '\n')
+      // Clean up any remaining HTML tags
+      .replace(/<[^>]*>/g, '')
+      // Clean up extra whitespace
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .trim();
+
+    const blob = new Blob([markdownContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = window.document.createElement('a');
+    a.href = url;
+    a.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`;
+    window.document.body.appendChild(a);
+    a.click();
+    window.document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) {
@@ -206,29 +512,61 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
               >
                 My Documents
               </Link>
-              <div className="text-sm text-gray-500">
-                {lastSaved
-                  ? `Last saved: ${lastSaved.toLocaleTimeString()}`
-                  : 'Not saved yet'}
-                {updateDocument.isPending && (
-                  <span className="ml-2 text-blue-600">Saving...</span>
-                )}
-                {hasUnsavedChanges && !updateDocument.isPending && (
-                  <span className="ml-2 text-orange-600">Unsaved changes</span>
+              <div className="flex items-center space-x-4">
+                <div className="text-sm text-gray-500">
+                  <div className="flex items-center space-x-2">
+                    <span
+                      className={`w-2 h-2 rounded-full ${isCollaborationReady ? 'bg-green-500' : 'bg-red-500'}`}
+                    ></span>
+                    <span>
+                      {isCollaborationReady
+                        ? `Document sync active • ${connectedUsers} user${connectedUsers !== 1 ? 's' : ''} online`
+                        : 'Connecting...'}
+                    </span>
+                  </div>
+                  {updateDocument.isPending && (
+                    <span className="ml-2 text-blue-600">
+                      Saving metadata...
+                    </span>
+                  )}
+                </div>
+                {activeUsers.length > 0 && (
+                  <div className="flex items-center space-x-1">
+                    {activeUsers.slice(0, 5).map((user, index) => (
+                      <div
+                        key={index}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium border-2 border-white shadow-sm"
+                        style={{ backgroundColor: user.color }}
+                        title={user.name}
+                      >
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                    ))}
+                    {activeUsers.length > 5 && (
+                      <div className="w-8 h-8 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs font-medium border-2 border-white shadow-sm">
+                        +{activeUsers.length - 5}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <button
-                onClick={handleManualSave}
-                disabled={
-                  !hasUnsavedChanges ||
-                  updateDocument.isPending ||
-                  !title.trim()
-                }
+                onClick={handleDownload}
+                disabled={!editor || !title.trim()}
+                className="bg-green-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                📥 <span className="ml-1">Download</span>
+              </button>
+              <button
+                onClick={handleSaveMetadata}
+                disabled={updateDocument.isPending || !title.trim()}
                 className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                {updateDocument.isPending ? 'Saving...' : 'Save'}
+                {updateDocument.isPending
+                  ? 'Saving...'
+                  : 'Save Title & Privacy'}
               </button>
               <div className="flex items-center group relative">
                 <label className="flex items-center text-sm cursor-pointer">
@@ -273,7 +611,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
               <button
                 onClick={() => editor.chain().focus().toggleBold().run()}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  editor.isActive('bold')
+                  activeFormats.bold
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
@@ -283,7 +621,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
               <button
                 onClick={() => editor.chain().focus().toggleItalic().run()}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  editor.isActive('italic')
+                  activeFormats.italic
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
@@ -293,7 +631,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
               <button
                 onClick={() => editor.chain().focus().toggleCode().run()}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  editor.isActive('code')
+                  activeFormats.code
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
@@ -306,7 +644,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
                   editor.chain().focus().toggleHeading({ level: 1 }).run()
                 }
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  editor.isActive('heading', { level: 1 })
+                  activeFormats.heading1
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
@@ -318,7 +656,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
                   editor.chain().focus().toggleHeading({ level: 2 }).run()
                 }
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  editor.isActive('heading', { level: 2 })
+                  activeFormats.heading2
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
@@ -330,7 +668,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
                   editor.chain().focus().toggleHeading({ level: 3 }).run()
                 }
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  editor.isActive('heading', { level: 3 })
+                  activeFormats.heading3
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
@@ -341,7 +679,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
               <button
                 onClick={() => editor.chain().focus().toggleBulletList().run()}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  editor.isActive('bulletList')
+                  activeFormats.bulletList
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
@@ -351,7 +689,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
               <button
                 onClick={() => editor.chain().focus().toggleOrderedList().run()}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  editor.isActive('orderedList')
+                  activeFormats.orderedList
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
@@ -361,7 +699,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
               <button
                 onClick={() => editor.chain().focus().toggleCodeBlock().run()}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  editor.isActive('codeBlock')
+                  activeFormats.codeBlock
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}

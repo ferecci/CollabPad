@@ -32,7 +32,6 @@ body {
   }
 }
 
-/* TipTap Editor Styles */
 .ProseMirror {
   outline: none;
   padding: 1rem;
@@ -137,10 +136,10 @@ body {
   margin-bottom: 0;
 }
 
-/* Code highlighting styles */
 .hljs-comment,
 .hljs-quote {
   color: #6a737d;
+  font-style: italic;
 }
 
 .hljs-variable,
@@ -173,16 +172,63 @@ body {
 .hljs-symbol,
 .hljs-bullet,
 .hljs-addition {
-  color: #032f62;
+  color: #22863a;
 }
 
 .hljs-title,
 .hljs-section {
-  color: #6f42c1;
+  color: #24292e;
   font-weight: bold;
 }
 
 .hljs-keyword,
 .hljs-selector-tag {
   color: #d73a49;
+  font-weight: bold;
+}
+
+.collab-cursor-caret {
+  display: inline-block;
+  width: 0;
+  border-left-width: 2px;
+  border-left-style: solid;
+  position: relative;
+  z-index: 10;
+}
+.collab-cursor-label {
+  position: absolute;
+  top: -1.5em;
+  left: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.collab-selection {
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.ProseMirror .collaboration-cursor__selection {
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.3;
+}
+
+.collaboration-cursor__caret {
+  animation: cursor-blink 1.5s infinite;
+}
+
+@keyframes cursor-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0.3;
+  }
 }
