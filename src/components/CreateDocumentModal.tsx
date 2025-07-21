@@ -16,15 +16,17 @@ export function CreateDocumentModal({
 }: CreateDocumentModalProps) {
   const [title, setTitle] = useState('');
   const [isPublic, setIsPublic] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const createDocument = trpc.documents.create.useMutation({
+  const { mutate, isPending } = trpc.documents.create.useMutation({
     onSuccess: () => {
       setTitle('');
       setIsPublic(false);
+      setMutationError(null);
       onSuccess();
     },
     onError: error => {
-      console.error('Failed to create document:', error);
+      setMutationError(error.message || 'Failed to create document.');
     },
   });
 
@@ -32,15 +34,16 @@ export function CreateDocumentModal({
     e.preventDefault();
     if (!title.trim()) return;
 
-    try {
-      await createDocument.mutateAsync({
-        title: title.trim(),
-        isPublic,
-      });
-    } catch (error) {
-      // Error handled in onError callback
-    }
+    await mutate({
+      title: title.trim(),
+      isPublic,
+    });
   };
+
+  // Clear error when modal is closed
+  React.useEffect(() => {
+    if (!isOpen) setMutationError(null);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -96,21 +99,27 @@ export function CreateDocumentModal({
             </label>
           </div>
 
+          {mutationError && (
+            <div className="mb-4 text-red-600 text-sm" role="alert">
+              {mutationError}
+            </div>
+          )}
+
           <div className="flex justify-end space-x-3">
             <button
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-              disabled={createDocument.isPending}
+              disabled={isPending}
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={!title.trim() || createDocument.isPending}
+              disabled={!title.trim() || isPending}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {createDocument.isPending ? 'Creating...' : 'Create Document'}
+              {isPending ? 'Creating...' : 'Create Document'}
             </button>
           </div>
         </form>

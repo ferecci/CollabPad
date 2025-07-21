@@ -16,7 +16,7 @@ A modern document editor built with Next.js 14, TypeScript, and tRPC.
 - **Backend**: tRPC, Prisma, PostgreSQL
 - **Auth**: NextAuth.js with GitHub OAuth
 - **Styling**: Tailwind CSS
-- **Testing**: Jest
+- **Testing**: Vitest
 
 ## Prerequisites
 

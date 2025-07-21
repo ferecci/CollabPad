@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { createTRPCRouter, protectedProcedure } from '../trpc';
+import { createTRPCRouter, protectedProcedure, Context } from '../trpc';
 
 export const documentsRouter = createTRPCRouter({
   // Create document
@@ -218,3 +218,164 @@ export const documentsRouter = createTRPCRouter({
       return { success: true };
     }),
 });
+
+// Input types
+type CreateInput = {
+  title: string;
+  content?: string;
+  isPublic?: boolean;
+};
+
+type UpdateInput = {
+  id: string;
+  title?: string;
+  content?: string;
+  isPublic?: boolean;
+};
+
+export const createDocumentResolver = async ({
+  ctx,
+  input,
+}: {
+  ctx: Context;
+  input: CreateInput;
+}) => {
+  const document = await ctx.prisma.document.create({
+    data: {
+      title: input.title,
+      content: input.content,
+      isPublic: input.isPublic,
+      ownerId:
+        ctx.session?.user?.id ??
+        (() => {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Not authenticated',
+          });
+        })(),
+    },
+    include: {
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+  return document;
+};
+
+export const updateDocumentResolver = async ({
+  ctx,
+  input,
+}: {
+  ctx: Context;
+  input: UpdateInput;
+}) => {
+  const document = await ctx.prisma.document.findFirst({
+    where: {
+      id: input.id,
+      OR: [
+        { ownerId: ctx.session?.user?.id ?? undefined },
+        {
+          collaborators: {
+            some: {
+              userId: ctx.session?.user?.id ?? undefined,
+              role: 'editor',
+            },
+          },
+        },
+      ],
+    },
+  });
+  if (!document) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Document not found or no edit permission',
+    });
+  }
+  const { id, ...updateData } = input;
+  const updatedDocument = await ctx.prisma.document.update({
+    where: { id },
+    data: updateData,
+    include: {
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+  return updatedDocument;
+};
+
+export const deleteDocumentResolver = async ({
+  ctx,
+  input,
+}: {
+  ctx: Context;
+  input: { id: string };
+}) => {
+  const document = await ctx.prisma.document.findFirst({
+    where: {
+      id: input.id,
+      ownerId: ctx.session!.user!.id!,
+    },
+  });
+  if (!document) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Document not found or no delete permission',
+    });
+  }
+  await ctx.prisma.document.delete({
+    where: { id: input.id },
+  });
+  return { success: true };
+};
+
+export const getDocumentByIdResolver = async ({
+  ctx,
+  input,
+}: {
+  ctx: Context;
+  input: { id: string };
+}) => {
+  const document = await ctx.prisma.document.findFirst({
+    where: {
+      id: input.id,
+      OR: [
+        { ownerId: ctx.session!.user!.id! },
+        {
+          collaborators: {
+            some: {
+              userId: ctx.session!.user!.id!,
+            },
+          },
+        },
+        { isPublic: true },
+      ],
+    },
+    include: {
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      collaborators: true,
+    },
+  });
+  if (!document) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Document not found',
+    });
+  }
+  return document;
+};

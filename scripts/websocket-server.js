@@ -5,7 +5,7 @@ const http = require('http');
 const WebSocket = require('ws');
 
 const PORT = process.env.PORT || 1234;
-const HOST = process.env.HOST || 'localhost';
+const HOST = process.env.HOST || '0.0.0.0';
 
 const server = http.createServer();
 const wss = new WebSocket.Server({ server });

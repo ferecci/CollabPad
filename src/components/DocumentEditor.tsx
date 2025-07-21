@@ -15,12 +15,20 @@ import python from 'highlight.js/lib/languages/python';
 import css from 'highlight.js/lib/languages/css';
 import json from 'highlight.js/lib/languages/json';
 import bash from 'highlight.js/lib/languages/bash';
-import { trpc } from '@/lib/trpc';
+import { trpc } from '../lib/trpc';
 import * as Y from 'yjs';
 // @ts-ignore
 import { WebsocketProvider } from 'y-websocket';
 import { useSession } from 'next-auth/react';
 import { CollaborativeCursorExtension } from './CollaborativeCursorExtension';
+import { Awareness } from 'y-protocols/awareness';
+import TurndownService from 'turndown';
+import { getRandomColor } from '../lib/getRandomColor';
+
+type AwarenessState = {
+  user?: { name?: string; color?: string; id?: string };
+  cursor?: { anchor: number; head: number };
+};
 
 declare global {
   interface Window {
@@ -36,29 +44,25 @@ lowlight.register('css', css);
 lowlight.register('json', json);
 lowlight.register('bash', bash);
 
-interface DocumentEditorProps {
-  documentId: string;
-}
-
-// Generate random user colors for collaboration
-const getRandomColor = () => {
-  const colors = [
-    '#4B2995',
-    '#B22234',
-    '#C97A11',
-    '#B59F00',
-    '#176CA6',
-    '#1B7C6E',
-    '#3A7A1D',
-    '#5A5A5A',
-    '#2D3A4A',
-    '#3E2723',
-  ];
-  return colors[Math.floor(Math.random() * colors.length)];
+type DocumentData = {
+  id: string;
+  title: string;
+  content: string;
+  isPublic: boolean;
+  owner?: { name?: string; email?: string };
 };
 
+interface DocumentEditorProps {
+  documentId: string;
+  testQueryResult?: {
+    data?: DocumentData;
+    isLoading?: boolean;
+    error?: unknown;
+  };
+}
+
 // Helper to force awareness broadcast by bumping a dummy field
-function bumpAwareness(awareness: any) {
+function bumpAwareness(awareness: Awareness) {
   const state = awareness.getLocalState() || {};
   // Add a dummy field
   awareness.setLocalState({ ...state, _bump: true });
@@ -70,17 +74,18 @@ function bumpAwareness(awareness: any) {
   }, 0);
 }
 
-export function DocumentEditor({ documentId }: DocumentEditorProps) {
+export function DocumentEditor({
+  documentId,
+  testQueryResult,
+}: DocumentEditorProps) {
   const { data: session } = useSession();
   const [title, setTitle] = useState('');
   const [isPublic, setIsPublic] = useState(false);
   const [isCollaborationReady, setIsCollaborationReady] = useState(false);
-  const [isCursorReady, setIsCursorReady] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState(0);
   const [activeUsers, setActiveUsers] = useState<
     Array<{ name: string; color: string }>
   >([]);
-  const [editorUpdate, setEditorUpdate] = useState(0);
   const [activeFormats, setActiveFormats] = useState({
     bold: false,
     italic: false,
@@ -102,7 +107,8 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
     data: document,
     isLoading,
     error,
-  } = trpc.documents.byId.useQuery({
+  } = testQueryResult ??
+  trpc.documents.byId.useQuery({
     id: documentId,
   });
 
@@ -119,27 +125,23 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
     if (typeof window !== 'undefined') {
       window.provider = providerRef.current;
     }
-    providerRef.current.on('status', (event: any) => {
+    providerRef.current.on('status', (event: { status: string }) => {
       const isConnected = event.status === 'connected';
       setIsCollaborationReady(isConnected);
       if (isConnected) {
         setTimeout(() => {
-          setIsCursorReady(true);
+          // setIsCursorReady(true); // This line was removed as per the edit hint
         }, 1000);
       } else {
-        setIsCursorReady(false);
+        // setIsCursorReady(false); // This line was removed as per the edit hint
       }
     });
     providerRef.current.awareness.on('change', () => {
       if (providerRef.current) {
         const states = providerRef.current.awareness.getStates();
-        const entries = Array.from(states.entries()) as [any, any][];
-        for (const [clientId, state] of entries) {
-          // console.log(`🌐 Awareness clientId: ${clientId}`, state.user);
-        }
         setConnectedUsers(states.size);
         const users: Array<{ name: string; color: string }> = [];
-        states.forEach((state: any) => {
+        (Array.from(states.values()) as AwarenessState[]).forEach(state => {
           if (state.user) {
             users.push({
               name: state.user.name || 'Anonymous',
@@ -177,7 +179,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
       }
       setYReady(false);
       setIsCollaborationReady(false);
-      setIsCursorReady(false);
+      // setIsCursorReady(false); // This line was removed as per the edit hint
     };
   }, []);
 
@@ -192,11 +194,11 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
     let id = baseId;
     if (providerRef.current) {
       const states = providerRef.current.awareness.getStates();
-      const names = Array.from(states.values())
-        .map((s: any) => s?.user?.name)
+      const names = (Array.from(states.values()) as AwarenessState[])
+        .map(s => s?.user?.name)
         .filter(Boolean);
-      const ids = Array.from(states.values())
-        .map((s: any) => s?.user?.id)
+      const ids = (Array.from(states.values()) as AwarenessState[])
+        .map(s => s?.user?.id)
         .filter(Boolean);
       // Find next available counter for name
       let counter = 1;
@@ -263,10 +265,6 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
           class: 'focus:outline-none min-h-[400px]',
         },
       },
-      onUpdate: ({ editor }) => {
-        // Force re-render to update button states
-        setEditorUpdate(prev => prev + 1);
-      },
       onTransaction: ({ editor }) => {
         // Update active format states
         setActiveFormats({
@@ -327,8 +325,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
     let lastPeers = awareness.getStates().size;
     let timeout: NodeJS.Timeout | null = null;
     const rebroadcastIfNewPeer = () => {
-      const states = awareness.getStates();
-      const peerCount = states.size;
+      const peerCount = awareness.getStates().size;
       if (peerCount > lastPeers) {
         if (timeout) clearTimeout(timeout);
         timeout = setTimeout(() => {
@@ -371,16 +368,14 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
   // Load document data when it's fetched (only for initial load and metadata)
   useEffect(() => {
     if (document && !title) {
-      // Load title and privacy settings (always needed)
-      setTitle(document.title);
-      setIsPublic(document.isPublic);
+      setTitle(document.title ?? '');
+      setIsPublic(!!document.isPublic);
     }
   }, [document, title]);
 
   // Load initial content only when collaboration is not ready (to avoid conflicts)
   useEffect(() => {
     if (document && editor && !isCollaborationReady) {
-      // Only set content if Yjs document is empty (first load)
       if (ydocRef.current && editor) {
         const yjsContent = ydocRef.current.getXmlFragment('default');
         if (yjsContent.length === 0 && document.content) {
@@ -405,44 +400,9 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
   const handleDownload = () => {
     if (!editor || !title) return;
 
-    // Get HTML content and convert to markdown-like format
     const htmlContent = editor.getHTML();
-
-    // Simple HTML to Markdown conversion
-    const markdownContent = htmlContent
-      // Remove wrapping paragraph if it's the only one
-      .replace(/^<p>(.*)<\/p>$/s, '$1')
-      // Convert headings
-      .replace(/<h1[^>]*>(.*?)<\/h1>/g, '# $1')
-      .replace(/<h2[^>]*>(.*?)<\/h2>/g, '## $1')
-      .replace(/<h3[^>]*>(.*?)<\/h3>/g, '### $1')
-      .replace(/<h4[^>]*>(.*?)<\/h4>/g, '#### $1')
-      .replace(/<h5[^>]*>(.*?)<\/h5>/g, '##### $1')
-      .replace(/<h6[^>]*>(.*?)<\/h6>/g, '###### $1')
-      // Convert bold and italic
-      .replace(/<strong[^>]*>(.*?)<\/strong>/g, '**$1**')
-      .replace(/<b[^>]*>(.*?)<\/b>/g, '**$1**')
-      .replace(/<em[^>]*>(.*?)<\/em>/g, '*$1*')
-      .replace(/<i[^>]*>(.*?)<\/i>/g, '*$1*')
-      // Convert inline code
-      .replace(/<code[^>]*>(.*?)<\/code>/g, '`$1`')
-      // Convert code blocks
-      .replace(/<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gs, '```\n$1\n```')
-      // Convert lists
-      .replace(/<ul[^>]*>/g, '')
-      .replace(/<\/ul>/g, '')
-      .replace(/<ol[^>]*>/g, '')
-      .replace(/<\/ol>/g, '')
-      .replace(/<li[^>]*>(.*?)<\/li>/g, '- $1')
-      // Convert paragraphs
-      .replace(/<p[^>]*>(.*?)<\/p>/g, '$1\n\n')
-      // Convert line breaks
-      .replace(/<br[^>]*>/g, '\n')
-      // Clean up any remaining HTML tags
-      .replace(/<[^>]*>/g, '')
-      // Clean up extra whitespace
-      .replace(/\n\s*\n\s*\n/g, '\n\n')
-      .trim();
+    const turndownService = new TurndownService();
+    const markdownContent = turndownService.turndown(htmlContent);
 
     const blob = new Blob([markdownContent], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
@@ -458,7 +418,10 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"
+          role="status"
+        ></div>
       </div>
     );
   }
@@ -587,7 +550,8 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
                 </div>
               </div>
               <span className="text-sm text-gray-500">
-                Owner: {document.owner.name || document.owner.email}
+                Owner:{' '}
+                {document.owner?.name || document.owner?.email || 'Unknown'}
               </span>
             </div>
           </div>
@@ -684,7 +648,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                • List
+                Bullet List
               </button>
               <button
                 onClick={() => editor.chain().focus().toggleOrderedList().run()}
@@ -694,8 +658,9 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                1. List
+                Ordered List
               </button>
+              <div className="w-px h-6 bg-gray-300"></div>
               <button
                 onClick={() => editor.chain().focus().toggleCodeBlock().run()}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
@@ -709,7 +674,7 @@ export function DocumentEditor({ documentId }: DocumentEditorProps) {
             </div>
           )}
 
-          <div className="min-h-[400px]">
+          <div className="p-6">
             <EditorContent editor={editor} />
           </div>
         </div>

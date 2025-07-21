@@ -1,8 +1,12 @@
 import { Extension } from '@tiptap/core';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Plugin } from 'prosemirror-state';
-import { EditorState } from 'prosemirror-state';
 import tinycolor from 'tinycolor2';
+
+type AwarenessState = {
+  user?: { name?: string; color?: string };
+  cursor?: { anchor: number; head: number };
+};
 
 export const CollaborativeCursorExtension = Extension.create({
   name: 'collaborativeCursor',
@@ -14,7 +18,7 @@ export const CollaborativeCursorExtension = Extension.create({
     return [
       new Plugin({
         props: {
-          decorations: (state: EditorState) => deco,
+          decorations: () => deco,
         },
         view: view => {
           const provider = this.options.provider;
@@ -24,7 +28,7 @@ export const CollaborativeCursorExtension = Extension.create({
           const updateDecorations = () => {
             const states = Array.from(
               provider.awareness.getStates().entries()
-            ) as [any, any][];
+            ) as [string, AwarenessState][];
             const decorations = [];
             for (const [clientId, state] of states) {
               if (!state || !state.user || !state.cursor) continue;
@@ -61,8 +65,8 @@ export const CollaborativeCursorExtension = Extension.create({
                     caret.style.pointerEvents = 'none';
                     const label = document.createElement('div');
                     label.className = 'collab-cursor-label';
-                    label.textContent = name || 'Anonymous';
-                    label.style.background = color;
+                    label.textContent = name ?? 'Anonymous';
+                    label.style.background = color ?? '#958DF1';
                     label.style.color = '#fff';
                     label.style.fontSize = '0.75em';
                     label.style.position = 'absolute';
