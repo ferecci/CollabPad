@@ -12,7 +12,7 @@
 
 ---
 
-## ✨ Features
+## Features
 
 | Category              |                                                                              |
 | --------------------- | ---------------------------------------------------------------------------- |
@@ -26,7 +26,7 @@
 
 ---
 
-## 🏗️ Architecture at a Glance
+## Architecture Scheme
 
 ```text
 ┌───────────────────────────────────────────┐
@@ -49,7 +49,7 @@
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer    | Tech                             |
 | -------- | -------------------------------- |
@@ -63,7 +63,7 @@
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -105,7 +105,7 @@ pnpm dev            # http://localhost:3000
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 collabpad/
@@ -122,7 +122,7 @@ collabpad/
 
 ---
 
-## 🔧 Useful Scripts
+## Useful Scripts
 
 | Command           | Purpose                          |
 | ----------------- | -------------------------------- |
@@ -138,7 +138,7 @@ collabpad/
 
 ---
 
-## 🐳 Docker Cheat-Sheet
+## Docker Tools
 
 ```bash
 # Spin everything up (detached)
@@ -153,12 +153,12 @@ docker-compose down
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Feel free to open an issue or pull request.
 
 ---
 
-## 📜 License
+## License
 
 MIT © 2025 [ferecci (Felipe Tancredo)](https://github.com/ferecci)
