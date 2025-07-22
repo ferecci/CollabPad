@@ -18,6 +18,13 @@ type Document = {
     name: string | null;
     email: string;
   };
+  collaborators: Array<{
+    user: {
+      id: string;
+      name: string | null;
+      email: string;
+    };
+  }>;
   _count: {
     collaborators: number;
   };
@@ -106,20 +113,25 @@ export function DocumentsList() {
 
               <p className="text-gray-600 text-sm mb-3 line-clamp-2">
                 {doc.content &&
-                doc.content.trim() &&
-                doc.content.trim() !== '<p></p>'
-                  ? doc.content.replace(/<[^>]*>/g, '').slice(0, 100) ||
-                    'No content yet...'
-                  : 'No content yet...'}
+                doc.content.replace(/<[^>]*>/g, '').trim().length > 0
+                  ? doc.content.replace(/<[^>]*>/g, '').slice(0, 100)
+                  : ''}
               </p>
 
               <div className="flex justify-between items-center text-xs text-gray-500">
                 <span>
-                  {doc._count.collaborators > 0
-                    ? `${doc._count.collaborators} collaborator${
-                        doc._count.collaborators > 1 ? 's' : ''
-                      }`
-                    : 'No collaborators'}
+                  {doc.collaborators && doc.collaborators.length > 0 ? (
+                    <>
+                      {doc.collaborators.map((collab, idx) => (
+                        <span key={collab.user.id}>
+                          {collab.user.name || collab.user.email || 'Unknown'}
+                          {idx < doc.collaborators.length - 1 ? ', ' : ''}
+                        </span>
+                      ))}
+                    </>
+                  ) : (
+                    <>{doc.owner.name || doc.owner.email || 'Unknown'}</>
+                  )}
                 </span>
                 <span>{new Date(doc.updatedAt).toLocaleDateString()}</span>
               </div>

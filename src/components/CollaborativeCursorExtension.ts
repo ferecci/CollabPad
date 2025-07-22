@@ -41,7 +41,6 @@ export const CollaborativeCursorExtension = Extension.create({
               const from = Math.min(anchor, head);
               const to = Math.max(anchor, head);
               if (from !== to) {
-                // Use a slightly darker border for contrast
                 const borderColor = tinycolor(color).darken(15).toString();
                 decorations.push(
                   Decoration.inline(from, to, {

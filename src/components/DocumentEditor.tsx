@@ -17,7 +17,7 @@ import json from 'highlight.js/lib/languages/json';
 import bash from 'highlight.js/lib/languages/bash';
 import { trpc } from '../lib/trpc';
 import * as Y from 'yjs';
-// @ts-ignore
+// @ts-expect-error
 import { WebsocketProvider } from 'y-websocket';
 import { useSession } from 'next-auth/react';
 import { CollaborativeCursorExtension } from './CollaborativeCursorExtension';
@@ -61,12 +61,9 @@ interface DocumentEditorProps {
   };
 }
 
-// Helper to force awareness broadcast by bumping a dummy field
 function bumpAwareness(awareness: Awareness) {
   const state = awareness.getLocalState() || {};
-  // Add a dummy field
   awareness.setLocalState({ ...state, _bump: true });
-  // Remove the dummy field after a short delay
   setTimeout(() => {
     const reverted = { ...awareness.getLocalState() };
     delete reverted._bump;
@@ -98,7 +95,6 @@ export function DocumentEditor({
     codeBlock: false,
   });
 
-  // Yjs setup
   const ydocRef = useRef<Y.Doc | null>(null);
   const providerRef = useRef<WebsocketProvider | null>(null);
   const [yReady, setYReady] = useState(false);
@@ -114,7 +110,6 @@ export function DocumentEditor({
 
   const updateDocument = trpc.documents.update.useMutation();
 
-  // Yjs and provider initialization ensures real-time collaboration and awareness state sync across clients. Handles connection, awareness, and user state updates robustly.
   useEffect(() => {
     if (!ydocRef.current) ydocRef.current = new Y.Doc();
     providerRef.current = new WebsocketProvider(
@@ -128,13 +123,6 @@ export function DocumentEditor({
     providerRef.current.on('status', (event: { status: string }) => {
       const isConnected = event.status === 'connected';
       setIsCollaborationReady(isConnected);
-      if (isConnected) {
-        setTimeout(() => {
-          // setIsCursorReady(true); // This line was removed as per the edit hint
-        }, 1000);
-      } else {
-        // setIsCursorReady(false); // This line was removed as per the edit hint
-      }
     });
     providerRef.current.awareness.on('change', () => {
       if (providerRef.current) {
@@ -155,7 +143,6 @@ export function DocumentEditor({
     setYReady(true);
   }, [documentId]);
 
-  // Clean up awareness on page unload/refresh
   const handleBeforeUnload = () => {
     if (providerRef.current) {
       providerRef.current.awareness.setLocalState(null);
@@ -168,7 +155,6 @@ export function DocumentEditor({
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       if (providerRef.current) {
-        // Clean up awareness state before destroying
         providerRef.current.awareness.setLocalState(null);
         providerRef.current.destroy();
         providerRef.current = null;
@@ -179,11 +165,9 @@ export function DocumentEditor({
       }
       setYReady(false);
       setIsCollaborationReady(false);
-      // setIsCursorReady(false); // This line was removed as per the edit hint
     };
   }, []);
 
-  // Memoize user color and user object for stable identity
   const userColor = useMemo(() => getRandomColor(), []);
   const userInfo = useMemo(() => {
     if (!session?.user) return null;
@@ -200,7 +184,6 @@ export function DocumentEditor({
       const ids = (Array.from(states.values()) as AwarenessState[])
         .map(s => s?.user?.id)
         .filter(Boolean);
-      // Find next available counter for name
       let counter = 1;
       let candidateName = baseName;
       let candidateId = baseId;
@@ -219,7 +202,6 @@ export function DocumentEditor({
     };
   }, [session?.user, userColor]);
 
-  // Update user info when session changes
   useEffect(() => {
     if (providerRef.current && userInfo && yReady) {
       try {
@@ -230,7 +212,6 @@ export function DocumentEditor({
     }
   }, [userInfo, yReady]);
 
-  // Editor initialization
   const editor = useEditor(
     {
       extensions: [
@@ -266,7 +247,6 @@ export function DocumentEditor({
         },
       },
       onTransaction: ({ editor }) => {
-        // Update active format states
         setActiveFormats({
           bold: editor.isActive('bold'),
           italic: editor.isActive('italic'),
@@ -280,11 +260,9 @@ export function DocumentEditor({
         });
       },
     },
-    // Dependencies: include collaboration states but keep it minimal
     [documentId, yReady, isCollaborationReady, session?.user?.id]
   );
 
-  // After provider is ready, set awareness state for user and cursor, then force a sync
   useEffect(() => {
     if (providerRef.current && userInfo && yReady && editor) {
       providerRef.current.awareness.setLocalStateField('user', userInfo);
@@ -293,14 +271,12 @@ export function DocumentEditor({
         anchor,
         head,
       });
-      // Force awareness sync to broadcast state to all peers
       providerRef.current.awareness.setLocalState(
         providerRef.current.awareness.getLocalState()
       );
     }
   }, [userInfo, yReady, editor]);
 
-  // On every selection change, update awareness with local cursor
   useEffect(() => {
     if (!editor || !providerRef.current || !userInfo) return;
     const updateCursor = () => {
@@ -311,14 +287,12 @@ export function DocumentEditor({
       });
     };
     editor.on('selectionUpdate', updateCursor);
-    // Set initial
     updateCursor();
     return () => {
       editor.off('selectionUpdate', updateCursor);
     };
   }, [editor, userInfo, yReady]);
 
-  // Rebroadcast awareness state when a new peer joins (debounced, no infinite loop)
   useEffect(() => {
     if (!providerRef.current) return;
     const awareness = providerRef.current.awareness;
@@ -342,7 +316,6 @@ export function DocumentEditor({
     };
   }, [yReady, userInfo, editor]);
 
-  // Rebroadcast awareness state on window focus/visibilitychange (using bump)
   useEffect(() => {
     if (!providerRef.current) return;
     const awareness = providerRef.current.awareness;
@@ -355,7 +328,6 @@ export function DocumentEditor({
     };
   }, [yReady, userInfo, editor]);
 
-  // Periodically bump awareness state every 10 seconds as a fallback
   useEffect(() => {
     if (!providerRef.current) return;
     const awareness = providerRef.current.awareness;
@@ -365,7 +337,6 @@ export function DocumentEditor({
     return () => clearInterval(interval);
   }, [yReady, userInfo, editor]);
 
-  // Load document data when it's fetched (only for initial load and metadata)
   useEffect(() => {
     if (document && !title) {
       setTitle(document.title ?? '');
@@ -373,19 +344,39 @@ export function DocumentEditor({
     }
   }, [document, title]);
 
-  // Load initial content only when collaboration is not ready (to avoid conflicts)
   useEffect(() => {
     if (document && editor && !isCollaborationReady) {
       if (ydocRef.current && editor) {
         const yjsContent = ydocRef.current.getXmlFragment('default');
-        if (yjsContent.length === 0 && document.content) {
+        const yjsArray = yjsContent.toArray();
+        const isYjsEmpty =
+          yjsArray.length === 0 ||
+          (yjsArray.length === 1 && yjsArray[0].toString() === '<p></p>');
+        if (isYjsEmpty && document.content) {
           editor.commands.setContent(document.content);
         }
       }
     }
   }, [document, editor, isCollaborationReady]);
 
-  // Save title and privacy changes (not content - that's handled by Yjs)
+  // Auto-save
+  useEffect(() => {
+    if (!editor || !document) return;
+    let lastSavedContent = document.content;
+    const interval = setInterval(() => {
+      const currentContent = editor.getHTML();
+      if (currentContent !== lastSavedContent) {
+        console.log('Auto-saving content:', currentContent);
+        updateDocument.mutate({
+          id: documentId,
+          content: currentContent,
+        });
+        lastSavedContent = currentContent;
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [editor, document, documentId, updateDocument]);
+
   const handleSaveMetadata = () => {
     if (document && title.trim()) {
       updateDocument.mutate({
@@ -396,7 +387,6 @@ export function DocumentEditor({
     }
   };
 
-  // Markdown conversion
   const handleDownload = () => {
     if (!editor || !title) return;
 
@@ -527,9 +517,7 @@ export function DocumentEditor({
                 disabled={updateDocument.isPending || !title.trim()}
                 className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                {updateDocument.isPending
-                  ? 'Saving...'
-                  : 'Save Title & Privacy'}
+                {updateDocument.isPending ? 'Saving...' : 'Save Document'}
               </button>
               <div className="flex items-center group relative">
                 <label className="flex items-center text-sm cursor-pointer">

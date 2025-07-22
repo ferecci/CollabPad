@@ -1,152 +1,164 @@
 # 📝 CollabPad
 
-A modern document editor built with Next.js 14, TypeScript, and tRPC.
+> Google-Docs-style real-time Markdown editor built from scratch with CRDTs & full-stack TypeScript.
 
-## Features
+[![CI](https://github.com/ferecci/collabpad/actions/workflows/ci.yml/badge.svg)](https://github.com/ferecci/collabpad/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Coverage](https://img.shields.io/badge/coverage-vitest-brightgreen)](#-testing)
 
-- **GitHub Authentication**: Secure OAuth login with NextAuth
-- **Document Management**: Create, edit, and organize documents
-- **Full-Stack TypeScript**: End-to-end type safety with tRPC
-- **Modern UI**: Clean interface built with Tailwind CSS
-- **Database**: PostgreSQL with Prisma ORM
+<div align="center">
+  <img src="docs/demo.gif" width="800" alt="CollabPad live demo" />
+</div>
 
-## Tech Stack
+---
 
-- **Frontend**: Next.js 14, React 18, TypeScript
-- **Backend**: tRPC, Prisma, PostgreSQL
-- **Auth**: NextAuth.js with GitHub OAuth
-- **Styling**: Tailwind CSS
-- **Testing**: Vitest
+## ✨ Features
 
-## Prerequisites
+| Category              |                                                                              |
+| --------------------- | ---------------------------------------------------------------------------- |
+| **Auth**              | GitHub OAuth via NextAuth.js                                                 |
+| **Real-time Editing** | Yjs CRDT over WebSocket, multi-cursor presence, offline conflict-free merges |
+| **Type Safety**       | End-to-end tRPC API with Zod validation                                      |
+| **Database**          | PostgreSQL + Prisma ORM                                                      |
+| **UI**                | TipTap 3 editor, Tailwind CSS theme                                          |
+| **DX / CI**           | ESLint, Prettier, Vitest, GitHub Actions matrix (Node 18 & 20)               |
+| **Dev Env**           | `docker-compose up -d` spins Postgres + Redis + y-websocket relay            |
 
-- Node.js 18+
-- pnpm (recommended)
+---
+
+## 🏗️ Architecture at a Glance
+
+```text
+┌───────────────────────────────────────────┐
+│                Browser                    │
+│┌───────────────┐   ┌─────────────────────┐│
+││ TipTap Editor │──▶│ Yjs Doc (CRDT)      ││
+│└───────────────┘   └─────────────────────┘│
+│               ▲           │ WebSocket      │
+└───────────────┼───────────┼────────────────┘
+                │           ▼
+┌───────────────┴───────────────────────────┐
+│        y-websocket Relay (Docker)         │
+└───────────────┬───────────────────────────┘
+                │ tRPC (HTTP)                   PostgreSQL
+┌───────────────┴──────────────────────┐      ┌──────────┐
+│        Next.js 14 API Routes         │─────▶│  Prisma  │
+│  (tRPC routers, NextAuth callbacks)  │      └──────────┘
+└──────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer    | Tech                             |
+| -------- | -------------------------------- |
+| Frontend | Next.js 14, React 18, TypeScript |
+| Backend  | tRPC, NextAuth.js, Prisma        |
+| Database | PostgreSQL                       |
+| Realtime | Yjs + y-websocket                |
+| Styling  | Tailwind CSS                     |
+| Testing  | Vitest                           |
+| Dev Ops  | Docker, GitHub Actions           |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node 18+ & pnpm
 - Docker & Docker Compose
-- GitHub account (for OAuth setup)
+- GitHub account (for OAuth)
 
-## Quick Start
+### Quick Start
 
-1. **Clone the repository**
+```bash
+git clone https://github.com/ferecci/collabpad.git
+cd collabpad
+pnpm install
 
-   ```bash
-   git clone <your-repo-url>
-   cd collabpad
-   ```
+# Spin up Postgres, Redis & y-websocket
+docker-compose up -d
 
-2. **Install dependencies**
+# Copy env vars & fill in GitHub creds
+cp env.example .env.local
+```
 
-   ```bash
-   pnpm install
-   ```
+Create a GitHub **OAuth App** (Developer Settings → _OAuth Apps_)
 
-3. **Set up GitHub OAuth App**
-   - Go to [GitHub Developer Settings](https://github.com/settings/developers)
-   - Click "New OAuth App"
-   - Fill in:
-     - **Application name**: `CollabPad (Local)`
-     - **Homepage URL**: `http://localhost:3000`
-     - **Authorization callback URL**: `http://localhost:3000/api/auth/callback/github`
-   - Save and copy the **Client ID** and **Client Secret**
+- **Homepage URL:** `http://localhost:3000`
+- **Authorization callback URL:** `http://localhost:3000/api/auth/callback/github`
 
-4. **Set up environment variables**
+Paste the `GITHUB_ID` and `GITHUB_SECRET` into `.env.local` and generate a `NEXTAUTH_SECRET`:
 
-   ```bash
-   cp env.example .env.local
-   ```
+```bash
+openssl rand -base64 32
+```
 
-   Edit `.env.local` and update:
+Run migrations and start the dev server:
 
-   ```bash
-   # Generate a random secret (you can use: openssl rand -base64 32)
-   NEXTAUTH_SECRET="your-generated-secret-here"
+```bash
+pnpm db:migrate     # creates tables & generates Prisma client
+pnpm dev            # http://localhost:3000
+```
 
-   # Use your GitHub OAuth credentials
-   GITHUB_ID="your-github-client-id"
-   GITHUB_SECRET="your-github-client-secret"
-   ```
+---
 
-5. **Start the database**
-
-   ```bash
-   docker-compose up -d
-   ```
-
-6. **Set up the database**
-
-   ```bash
-   pnpm db:generate
-   pnpm db:push
-   ```
-
-7. **Start the development server**
-
-   ```bash
-   pnpm dev
-   ```
-
-8. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-## Project Structure
+## 📂 Project Structure
 
 ```
 collabpad/
-├── src/
-│   ├── app/                 # Next.js 14 app directory
-│   ├── components/          # React components
-│   ├── lib/                 # Utilities and configurations
-│   ├── server/              # tRPC server setup
-│   └── types/               # TypeScript type definitions
-├── prisma/                  # Database schema and migrations
-└── docker-compose.yml       # Development environment
+├─ src/
+│  ├─ app/               # Next.js app-router pages & layouts
+│  ├─ components/        # Reusable React components
+│  ├─ lib/               # Helpers & utilities
+│  ├─ server/            # tRPC routers & NextAuth config
+│  └─ types/             # Shared type definitions
+├─ prisma/               # Schema & migrations
+├─ docker-compose.yml    # Postgres, Redis, y-websocket
+└─ vitest.config.ts
 ```
 
-## Development
+---
 
-### Available Scripts
+## 🔧 Useful Scripts
 
-- `pnpm dev` - Start development server
-- `pnpm dev:quiet` - Start development server (suppresses npm warnings)
-- `pnpm build` - Build for production
-- `pnpm start` - Start production server
-- `pnpm lint` - Run ESLint
-- `pnpm lint:fix` - Fix ESLint errors
-- `pnpm format` - Format code with Prettier
-- `pnpm test` - Run tests
-- `pnpm type-check` - Run TypeScript type checking
+| Command           | Purpose                          |
+| ----------------- | -------------------------------- |
+| `pnpm dev`        | Start dev server with hot-reload |
+| `pnpm build`      | Production build                 |
+| `pnpm start`      | Start prod server                |
+| `pnpm lint`       | Run ESLint + Prettier            |
+| `pnpm format`     | Auto-format code                 |
+| `pnpm test`       | Run Vitest unit tests            |
+| `pnpm type-check` | Run `tsc --noEmit`               |
+| `pnpm db:migrate` | Prisma migrate & generate client |
+| `pnpm db:studio`  | Launch Prisma Studio GUI         |
 
-### Database Commands
+---
 
-- `pnpm db:generate` - Generate Prisma client
-- `pnpm db:push` - Push schema to database
-- `pnpm db:migrate` - Run database migrations
-- `pnpm db:studio` - Open Prisma Studio
-- `pnpm db:seed` - Seed database with test data
-
-## Docker Development
+## 🐳 Docker Cheat-Sheet
 
 ```bash
-# Start services
+# Spin everything up (detached)
 docker-compose up -d
 
-# View logs
+# Tail logs
 docker-compose logs -f
 
-# Stop services
+# Shut it all down
 docker-compose down
 ```
 
-## Environment Variables
+---
 
-| Variable          | Description                  | Required |
-| ----------------- | ---------------------------- | -------- |
-| `DATABASE_URL`    | PostgreSQL connection string | ✅       |
-| `NEXTAUTH_URL`    | Base URL for NextAuth        | ✅       |
-| `NEXTAUTH_SECRET` | Secret for JWT encryption    | ✅       |
-| `GITHUB_ID`       | GitHub OAuth Client ID       | ✅       |
-| `GITHUB_SECRET`   | GitHub OAuth Client Secret   | ✅       |
+## 🤝 Contributing
 
-## License
+Contributions are welcome! Feel free to open an issue or pull request.
 
-This project is licensed in 2025 under the MIT License by ferecci (Felipe Tancredo).
+---
+
+## 📜 License
+
+MIT © 2025 [ferecci (Felipe Tancredo)](https://github.com/ferecci)

@@ -64,6 +64,17 @@ export const documentsRouter = createTRPCRouter({
               email: true,
             },
           },
+          collaborators: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
           _count: {
             select: {
               collaborators: true,

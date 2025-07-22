@@ -40,7 +40,6 @@ export function CreateDocumentModal({
     });
   };
 
-  // Clear error when modal is closed
   React.useEffect(() => {
     if (!isOpen) setMutationError(null);
   }, [isOpen]);
